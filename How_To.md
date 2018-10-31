@@ -38,7 +38,9 @@
   $ mv Hymmnos-rootkit/ hymmnos/
   ```
 
-![hide_document_after](C:\Users\hhhgu\Desktop\学习资料\软件安全原理\第二次作业\Hymmnos-rootkit\screenshot\hide_document_after.png)![hide_document_before](C:\Users\hhhgu\Desktop\学习资料\软件安全原理\第二次作业\Hymmnos-rootkit\screenshot\hide_document_before.png)
+![hide_document_after](https://github.com/udidi/Hymmnos-rootkit/blob/master/screenshot/hide_document_after.png)
+
+![hide_document_before](https://github.com/udidi/Hymmnos-rootkit/blob/master/screenshot/hide_document_before.png)
 
 
 
